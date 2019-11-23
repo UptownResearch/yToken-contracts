@@ -1,0 +1,13 @@
+- language: node_js
+      name: "smart contract tests"
+      node_js:
+        - '8'
+      before_install:
+        - rm -rf build
+        - rm -rf node_modules
+        - npm install -g ganache-cli
+      before_script:
+        - ganache-cli -d --gasLimit=100000000 -i 100001  > /dev/null &
+        - npm ci
+      script:
+        - npx truffle test
