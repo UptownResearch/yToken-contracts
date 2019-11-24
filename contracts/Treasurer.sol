@@ -117,7 +117,10 @@ contract Treasurer is Ownable {
         uint256 collateralAmountToLock
     ) public {
         require(series < totalSeries, "treasurer-make-unissued-series");
-        // first check if sufficient capital to lock up
+        require(
+            yTokens[series].maturityTime() > now,
+            "treasurer-issueYToken-invalid-or-matured-ytoken"
+        );
         require(
             collateralToken.transferFrom(
                 msg.sender,
@@ -135,7 +138,6 @@ contract Treasurer is Ownable {
             "treasurer-issueYToken-insufficient-collateral-for-those-tokens"
         );
 
-        // lock msg.sender Collateral, add debtAmount
         repos[series][msg.sender].lockedCollateralAmount = repo
             .lockedCollateralAmount
             .add(collateralAmountToLock);
@@ -144,24 +146,16 @@ contract Treasurer is Ownable {
         );
 
         // mint new yTokens
-        // first, ensure yToken is initialized and matures in the future
-        require(
-            yTokens[series].maturityTime() > now,
-            "treasurer-issueYToken-invalid-or-matured-ytoken"
-        );
         yTokens[series].mint(msg.sender, yTokenAmount);
     }
 
     // series - yToken  series
     // credit   - amount of yToken to wipe
-    function payoutYTokens(uint256 series, uint256 credit)
+    function payoutDebt(uint256 series, uint256 credit)
         public
         returns (bool, uint256)
     {
-        require(
-            series < totalSeries,
-            "treasurer-payoutYTokens-unissued-series"
-        );
+        require(series < totalSeries, "treasurer-payoutDebt-unissued-series");
         require(
             repos[series][msg.sender].debtAmount >= credit,
             "treasurer-wipe-wipe-more-debtAmount-than-present"
@@ -177,11 +171,15 @@ contract Treasurer is Ownable {
             .sub(credit);
     }
 
-    // wipe repo debtAmount with yToken
+    // redeemDebtByProvidingYTokens repo debtAmount with yToken
     // series - yToken to mint
     // credit   - amount of yToken to wipe
     // released  - amount of collateral to free
-    function wipe(uint256 series, uint256 credit, uint256 released) public {
+    function redeemDebtByProvidingYTokens(
+        uint256 series,
+        uint256 credit,
+        uint256 released
+    ) public {
         require(series < totalSeries, "treasurer-wipe-unissued-series");
         // if yToken has matured, should call resolve
         require(
@@ -222,7 +220,8 @@ contract Treasurer is Ownable {
 
         collateralToken.transfer(msg.sender, released);
     }
-    // liquidate a repo
+
+    // liquidates a repo (partially)
     // series - yToken of debtAmount to buy
     // bum    - owner of the undercollateralized repo
     // settlementTokenAmountToBeProvided - amount of settlementTokens to sell
@@ -269,7 +268,7 @@ contract Treasurer is Ownable {
     // redeem yTokens for settlementTokens
     // series - matured yToken
     // amount    - amount of yToken to close
-    function withdraw(uint256 series, uint256 amount) public {
+    function claimFaceValue(uint256 series, uint256 amount) public {
         require(series < totalSeries, "treasurer-withdraw-unissued-series");
         require(
             now > yTokens[series].maturityTime(),

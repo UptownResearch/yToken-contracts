@@ -137,7 +137,7 @@ contract("Treasurer", async accounts => {
     );
   });
 
-  it("should accept tokens to wipe yToken debt", async () => {
+  it("should accept tokens to redeemDebtByProvidingYTokens yToken debt", async () => {
     var amountToWipe = web3.utils.toWei(".1");
     var currentTimeStamp = await timestamp("latest", web3);
     var series = 0;
@@ -161,21 +161,26 @@ contract("Treasurer", async accounts => {
     const token = await TreasurerInstance.yTokens.call(series);
     const yTokenInstance = await YToken.at(token);
 
-    //authorize the wipe
+    //authorize the redeemDebtByProvidingYTokens
     await yTokenInstance.approve(TreasurerInstance.address, amountToWipe, {
       from: accounts[1]
     });
-    // wipe tokens
-    await TreasurerInstance.wipe(series, amountToWipe, web3.utils.toWei(".1"), {
-      from: accounts[1]
-    });
+    // redeemDebtByProvidingYTokens tokens
+    await TreasurerInstance.redeemDebtByProvidingYTokens(
+      series,
+      amountToWipe,
+      web3.utils.toWei(".1"),
+      {
+        from: accounts[1]
+      }
+    );
 
     // check yToken balance
     const balance = await yTokenInstance.balanceOf(accounts[1]);
     assert.equal(
       balance.toString(),
       web3.utils.toWei(".9"),
-      "Did not wipe yTokens"
+      "Did not redeemDebtByProvidingYTokens yTokens"
     );
 
     //check unlocked collateral, lockedCollateralAmount collateral
@@ -188,7 +193,7 @@ contract("Treasurer", async accounts => {
     assert.equal(
       repo.debtAmount.toString(),
       web3.utils.toWei(".9"),
-      "Did not wipe debg"
+      "Did not redeemDebtByProvidingYTokens debg"
     );
   });
 
@@ -239,7 +244,7 @@ contract("Treasurer", async accounts => {
     rate = web3.utils.toWei(".02"); // rate = Dai/ETH
     await OracleMock.givenAnyReturnUint(rate);
     await truffleAssert.reverts(
-      TreasurerInstance.wipe(
+      TreasurerInstance.redeemDebtByProvidingYTokens(
         series,
         web3.utils.toWei("100"),
         web3.utils.toWei("0"),
@@ -277,11 +282,11 @@ contract("Treasurer", async accounts => {
     assert.equal(
       repo.debtAmount.toString(),
       web3.utils.toWei("50"),
-      "Did not wipe debg"
+      "Did not redeemDebtByProvidingYTokens debg"
     );
   });
 
-  it("should allow token holder to withdraw face value", async () => {
+  it("should allow token holder to claimFaceValue face value", async () => {
     var series = 0;
     var era = (await timestamp("latest", web3)) + SECONDS_IN_DAY;
     await TreasurerInstance.createNewYToken(era);
@@ -300,7 +305,7 @@ contract("Treasurer", async accounts => {
     );
     await helper.advanceTimeAndBlock(SECONDS_IN_DAY * 1.5);
 
-    const result = await TreasurerInstance.withdraw(
+    const result = await TreasurerInstance.claimFaceValue(
       series,
       web3.utils.toWei("25"),
       {from: accounts[2]}
