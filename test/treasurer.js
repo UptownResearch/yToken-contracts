@@ -20,8 +20,11 @@ contract("Treasurer", async accounts => {
     erc20 = await ERC20.new();
     collateralToken = await MockContract.new();
     await collateralToken.givenAnyReturnBool(true);
+    settlementToken = await MockContract.new();
+    await settlementToken.givenAnyReturnBool(true);
     TreasurerInstance = await Treasurer.new(
       collateralToken.address,
+      settlementToken.address,
       collateralRatio,
       minCollateralRatio
     );
@@ -223,18 +226,17 @@ contract("Treasurer", async accounts => {
     );
   });
 
-  it("should accept liquidations undercollateralized repos", async () => {
+  it.only("should accept liquidations undercollateralized repos", async () => {
     var series = 0;
     var era = (await timestamp("latest", web3)) + SECONDS_IN_DAY;
     await TreasurerInstance.createNewYToken(era);
 
     // set up oracle
-    const oracle = await Oracle.new();
     var rate = web3.utils.toWei(".01"); // rate = Dai/ETH
     await OracleMock.givenAnyReturnUint(rate); // should price ETH at $100 * ONE
 
     //fund account
-    await TreasurerInstance.topUpCollateral(web3.utils.toWei("1.5"), {
+    await TreasurerInstance.topUpCollateral(web3.utils.toWei("52.5"), {
       from: accounts[2]
     });
     // issueYToken new yTokens with new account
@@ -255,14 +257,13 @@ contract("Treasurer", async accounts => {
     //change rate to issueYToken tokens undercollateralized
     rate = web3.utils.toWei(".02"); // rate = Dai/ETH
     await OracleMock.givenAnyReturnUint(rate);
-    await truffleAssert.fails(
+    await truffleAssert.reverts(
       TreasurerInstance.wipe(
         series,
         web3.utils.toWei("100"),
         web3.utils.toWei("0"),
         {from: accounts[2]}
       ),
-      truffleAssert.REVERT,
       "treasurer-wipe-insufficient-token-balance"
     );
 
@@ -289,7 +290,7 @@ contract("Treasurer", async accounts => {
     const repo = await TreasurerInstance.repos(series, accounts[2]);
     assert.equal(
       repo.lockedCollateralAmount.toString(),
-      web3.utils.toWei(".45"),
+      web3.utils.toWei("1.05"),
       "Did not unlock collateral"
     );
     assert.equal(
@@ -297,34 +298,6 @@ contract("Treasurer", async accounts => {
       web3.utils.toWei("50"),
       "Did not wipe debg"
     );
-  });
-
-  it("should allow for settlement", async () => {
-    var series = 0;
-    var era = (await timestamp("latest", web3)) + SECONDS_IN_DAY;
-    await TreasurerInstance.createNewYToken(era);
-
-    // set up oracle
-    const oracle = await Oracle.new();
-    var rate = web3.utils.toWei(".01"); // rate = Dai/ETH
-    await OracleMock.givenAnyReturnUint(rate); // should price ETH at $100 * ONE
-
-    //fund account
-    await TreasurerInstance.topUpCollateral(web3.utils.toWei("1.5"), {
-      from: accounts[2]
-    });
-    // issueYToken new yTokens with new account
-    await TreasurerInstance.issueYToken(
-      series,
-      web3.utils.toWei("100"),
-      web3.utils.toWei("1.5"),
-      {from: accounts[2]}
-    );
-
-    await helper.advanceTimeAndBlock(SECONDS_IN_DAY * 1.5);
-    await TreasurerInstance.settlement(series);
-    var rate = (await TreasurerInstance.settled(series)).toString();
-    assert.equal(rate, web3.utils.toWei(".01"), "settled rate not set");
   });
 
   it("should allow token holder to withdraw face value", async () => {
@@ -349,8 +322,6 @@ contract("Treasurer", async accounts => {
       {from: accounts[2]}
     );
     await helper.advanceTimeAndBlock(SECONDS_IN_DAY * 1.5);
-    await TreasurerInstance.settlement(series);
-    var balance_before = await web3.eth.getBalance(accounts[2]);
 
     const result = await TreasurerInstance.withdraw(
       series,
@@ -359,11 +330,11 @@ contract("Treasurer", async accounts => {
     );
 
     const transferFunctionality = erc20.contract.methods
-      .transfer(accounts[2], web3.utils.toWei("0.25"))
+      .transfer(accounts[2], web3.utils.toWei("25"))
       .encodeABI();
     assert.equal(
       1,
-      await collateralToken.invocationCountForCalldata.call(
+      await settlementToken.invocationCountForCalldata.call(
         transferFunctionality
       )
     );
@@ -391,20 +362,8 @@ contract("Treasurer", async accounts => {
       {from: accounts[2]}
     );
     await helper.advanceTimeAndBlock(SECONDS_IN_DAY * 1.5);
-    await TreasurerInstance.settlement(series);
-    var balance_before = await web3.eth.getBalance(accounts[2]);
 
     //run close
     await TreasurerInstance.close(series, {from: accounts[2]});
-
-    const transferFunctionality = erc20.contract.methods
-      .transfer(accounts[2], web3.utils.toWei("0.5"))
-      .encodeABI();
-    assert.equal(
-      1,
-      await collateralToken.invocationCountForCalldata.call(
-        transferFunctionality
-      )
-    );
   });
 });

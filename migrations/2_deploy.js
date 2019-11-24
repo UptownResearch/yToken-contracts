@@ -8,9 +8,13 @@ module.exports = async function(deployer, network, accounts) {
     //Token stands in for Dai
     await deployer.deploy(ERC20Mintable);
     collateralToken = await ERC20Mintable.deployed();
+
+    await deployer.deploy(ERC20Mintable);
+    settlementToken = await ERC20Mintable.deployed();
     await deployer.deploy(
       Treasurer,
       collateralToken.address,
+      settlementToken.address,
       web3.utils.toWei("1.5"),
       web3.utils.toWei("1.05")
     );
