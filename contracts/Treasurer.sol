@@ -250,10 +250,10 @@ contract Treasurer is Ownable {
         emit Log(collateralTokensToBeReleased);
 
         //update repo
-        repo.lockedCollateralAmount = repo.lockedCollateralAmount.sub(
-            collateralTokensToBeReleased
-        );
-        repo.debtAmount = repo.debtAmount.sub(amount);
+        repos[series][bum].lockedCollateralAmount = repo
+            .lockedCollateralAmount
+            .sub(collateralTokensToBeReleased);
+        repos[series][bum].debtAmount = repo.debtAmount.sub(amount);
 
         //Make settlementTokens withdrawable in the future
         settlementTokenFund[series] = settlementTokenFund[series].add(amount);

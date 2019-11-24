@@ -226,7 +226,7 @@ contract("Treasurer", async accounts => {
     );
   });
 
-  it.only("should accept liquidations undercollateralized repos", async () => {
+  it("should accept liquidations undercollateralized repos", async () => {
     var series = 0;
     var era = (await timestamp("latest", web3)) + SECONDS_IN_DAY;
     await TreasurerInstance.createNewYToken(era);
@@ -290,7 +290,7 @@ contract("Treasurer", async accounts => {
     const repo = await TreasurerInstance.repos(series, accounts[2]);
     assert.equal(
       repo.lockedCollateralAmount.toString(),
-      web3.utils.toWei("1.05"),
+      web3.utils.toWei("0.45"),
       "Did not unlock collateral"
     );
     assert.equal(
