@@ -1,13 +1,13 @@
 pragma solidity ^0.5.2;
 
-import "./yToken.sol";
-import "./oracle/Oracle.sol";
 import "openzeppelin-solidity/contracts/token/ERC20/ERC20.sol";
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "openzeppelin-solidity/contracts/math/Math.sol";
-
-import "./libraries/ExponentialOperations.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
+
+import "./yToken.sol";
+import "./oracle/Oracle.sol";
+import "./libraries/ExponentialOperations.sol";
 
 contract Treasurer is Ownable {
     using SafeMath for uint256;
@@ -20,7 +20,6 @@ contract Treasurer is Ownable {
 
     mapping(uint256 => yToken) public yTokens;
     mapping(uint256 => mapping(address => Repo)) public repos; // lockedCollateralAmount ETH and debtAmount
-    mapping(address => uint256) public unlocked; // unlocked ETH
     mapping(uint256 => uint256) public totalCollateralAmountInSeries;
     // This fund collects settlementTokens from upfront re-payments or liquidations
     mapping(uint256 => uint256) public settlementTokenFund; // This fund collects settlementTokens from upfront re-payments or liquidations
@@ -45,9 +44,6 @@ contract Treasurer is Ownable {
         minCollateralRatio = minCollateralRatio_;
     }
 
-    // --- Actions ---
-
-    // provide address to oracle
     // oracle_ - address of the oracle contract
     function setOracle(Oracle oracle_) public onlyOwner {
         require(address(oracle) == address(0), "oracle was already set");
@@ -63,8 +59,6 @@ contract Treasurer is Ownable {
         r = oracle.read();
     }
 
-    // issue new yToken
-    // face value of 1 is assumed
     function createNewYToken(uint256 maturityTime)
         public
         returns (uint256 series)
@@ -81,8 +75,10 @@ contract Treasurer is Ownable {
         totalSeries = totalSeries + 1;
     }
 
-    // add collateral to repo
-    function topUpCollateral(uint256 amountCollateral) public payable {
+    function topUpCollateral(uint256 amountCollateral, uint256 series)
+        public
+        payable
+    {
         require(
             collateralToken.transferFrom(
                 msg.sender,
@@ -91,17 +87,23 @@ contract Treasurer is Ownable {
             ),
             "treasurer-topUpCollateral-collateralRatio-include-deposit"
         );
-        unlocked[msg.sender] = unlocked[msg.sender].add(amountCollateral);
+        repos[series][msg.sender].lockedCollateralAmount = repos[series][msg
+            .sender]
+            .lockedCollateralAmount
+            .add(amountCollateral);
     }
 
     // remove collateral from repo
-    // amount - amount of ETH to remove from unlocked account
-    function withdrawCollateral(uint256 amount) public {
+    // amount - amount of ETH to remove from repo
+    function withdrawCollateral(uint256 amount, uint256 series) public {
         require(
             amount >= 0,
             "treasurer-withdrawCollateral-insufficient-balance"
         );
-        unlocked[msg.sender] = unlocked[msg.sender].sub(amount);
+        repos[series][msg.sender].lockedCollateralAmount = repos[series][msg
+            .sender]
+            .lockedCollateralAmount
+            .sub(amount);
         collateralToken.transfer(msg.sender, amount);
     }
 
@@ -117,8 +119,12 @@ contract Treasurer is Ownable {
         require(series < totalSeries, "treasurer-make-unissued-series");
         // first check if sufficient capital to lock up
         require(
-            unlocked[msg.sender] >= collateralAmountToLock,
-            "treasurer-issueYToken-insufficient-unlocked-to-lock"
+            collateralToken.transferFrom(
+                msg.sender,
+                address(this),
+                collateralAmountToLock
+            ),
+            "transferFrom for collateralToken failed"
         );
 
         Repo memory repo = repos[series][msg.sender];
@@ -130,12 +136,12 @@ contract Treasurer is Ownable {
         );
 
         // lock msg.sender Collateral, add debtAmount
-        unlocked[msg.sender] = unlocked[msg.sender].sub(collateralAmountToLock);
-        repo.lockedCollateralAmount = repo.lockedCollateralAmount.add(
-            collateralAmountToLock
+        repos[series][msg.sender].lockedCollateralAmount = repo
+            .lockedCollateralAmount
+            .add(collateralAmountToLock);
+        repos[series][msg.sender].debtAmount = repo.debtAmount.add(
+            yTokenAmount
         );
-        repo.debtAmount = repo.debtAmount.add(yTokenAmount);
-        repos[series][msg.sender] = repo;
 
         // mint new yTokens
         // first, ensure yToken is initialized and matures in the future
@@ -214,14 +220,12 @@ contract Treasurer is Ownable {
         repo.debtAmount = repo.debtAmount.sub(credit);
         repos[series][msg.sender] = repo;
 
-        // add collateral back to the unlocked
-        unlocked[msg.sender] = unlocked[msg.sender].add(released);
+        collateralToken.transfer(msg.sender, released);
     }
-    event Log(uint256 number);
     // liquidate a repo
     // series - yToken of debtAmount to buy
     // bum    - owner of the undercollateralized repo
-    // amount - amount of yToken debtAmount to buy
+    // settlementTokenAmountToBeProvided - amount of settlementTokens to sell
     function liquidate(
         uint256 series,
         address bum,
@@ -238,16 +242,12 @@ contract Treasurer is Ownable {
             repo.debtAmount,
             settlementTokenAmountToBeProvided
         );
-        emit Log(amount);
-        emit Log(rate);
 
         // exchange collateralToken vs settlmentToken
         uint256 collateralTokensToBeReleased = Math.min(
             (amount.mul(105) / 100).wmul(rate),
             repo.lockedCollateralAmount
         );
-        emit Log(repo.lockedCollateralAmount);
-        emit Log(collateralTokensToBeReleased);
 
         //update repo
         repos[series][bum].lockedCollateralAmount = repo

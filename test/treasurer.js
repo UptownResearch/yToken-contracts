@@ -59,22 +59,22 @@ contract("Treasurer", async accounts => {
   });
 
   it("should accept collateral", async () => {
-    await TreasurerInstance.topUpCollateral(web3.utils.toWei("1"), {
+    await TreasurerInstance.topUpCollateral(web3.utils.toWei("1"), 0, {
       from: accounts[1]
     });
-    var result = await TreasurerInstance.unlocked(accounts[1]);
+    var result = await TreasurerInstance.repos(0, accounts[1]);
     assert.equal(
-      result.toString(),
+      result[0].toString(),
       web3.utils.toWei("1"),
       "Did not accept collateral"
     );
   });
 
   it("should return collateral", async () => {
-    await TreasurerInstance.topUpCollateral(web3.utils.toWei("1"), {
+    await TreasurerInstance.topUpCollateral(web3.utils.toWei("1"), 0, {
       from: accounts[1]
     });
-    await TreasurerInstance.withdrawCollateral(web3.utils.toWei("1"), {
+    await TreasurerInstance.withdrawCollateral(web3.utils.toWei("1"), 0, {
       from: accounts[1]
     });
     const transferFunctionality = erc20.contract.methods
@@ -100,12 +100,8 @@ contract("Treasurer", async accounts => {
     var series = 0;
     var era = currentTimeStamp + SECONDS_IN_DAY;
     await TreasurerInstance.createNewYToken(era);
-    //funding
-    await TreasurerInstance.topUpCollateral(web3.utils.toWei("1"), {
-      from: accounts[1]
-    });
+
     // set up oracle
-    const oracle = await Oracle.new();
     var rate = web3.utils.toWei(".01"); // rate = Dai/ETH
     await OracleMock.givenAnyReturnUint(rate); // should price ETH at $100 * ONE
 
@@ -147,11 +143,6 @@ contract("Treasurer", async accounts => {
     var series = 0;
     var era = currentTimeStamp + SECONDS_IN_DAY;
     await TreasurerInstance.createNewYToken(era);
-
-    //funding
-    await TreasurerInstance.topUpCollateral(web3.utils.toWei("1"), {
-      from: accounts[1]
-    });
 
     // set up oracle
     const oracle = await Oracle.new();
@@ -209,12 +200,6 @@ contract("Treasurer", async accounts => {
     var rate = web3.utils.toWei(".01"); // rate = Dai/ETH
     await OracleMock.givenAnyReturnUint(rate); // should price ETH at $100 * ONE
 
-    // issueYToken new yTokens with new account
-    // at 100 dai/ETH, and 150% collateral requirement (set at deployment),
-    // should refuse to create 101 yTokens
-    await TreasurerInstance.topUpCollateral(web3.utils.toWei("1.5"), {
-      from: accounts[2]
-    });
     await truffleAssert.fails(
       TreasurerInstance.issueYToken(
         series,
@@ -235,10 +220,6 @@ contract("Treasurer", async accounts => {
     var rate = web3.utils.toWei(".01"); // rate = Dai/ETH
     await OracleMock.givenAnyReturnUint(rate); // should price ETH at $100 * ONE
 
-    //fund account
-    await TreasurerInstance.topUpCollateral(web3.utils.toWei("52.5"), {
-      from: accounts[2]
-    });
     // issueYToken new yTokens with new account
     await TreasurerInstance.issueYToken(
       series,
@@ -310,10 +291,6 @@ contract("Treasurer", async accounts => {
     var rate = web3.utils.toWei(".01"); // rate = Dai/ETH
     await OracleMock.givenAnyReturnUint(rate); // should price ETH at $100 * ONE
 
-    //fund account
-    await TreasurerInstance.topUpCollateral(web3.utils.toWei("1.5"), {
-      from: accounts[2]
-    });
     // issueYToken new yTokens with new account
     await TreasurerInstance.issueYToken(
       series,
@@ -346,12 +323,11 @@ contract("Treasurer", async accounts => {
     await TreasurerInstance.createNewYToken(era);
 
     // set up oracle
-    const oracle = await Oracle.new();
     var rate = web3.utils.toWei(".01"); // rate = Dai/ETH
     await OracleMock.givenAnyReturnUint(rate); // should price ETH at $100 * ONE
 
     //fund account
-    await TreasurerInstance.topUpCollateral(web3.utils.toWei("1.5"), {
+    await TreasurerInstance.topUpCollateral(web3.utils.toWei("1.5"), series, {
       from: accounts[2]
     });
     // issueYToken new yTokens with new account
