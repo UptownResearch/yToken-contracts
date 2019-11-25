@@ -13,6 +13,7 @@ contract Treasurer is Ownable {
     using SafeMath for uint256;
     using ExponentialOperations for uint256;
 
+    event Log(uint256 amount);
     struct Repo {
         uint256 lockedCollateralAmount;
         uint256 debtAmount;
@@ -96,14 +97,14 @@ contract Treasurer is Ownable {
     // remove collateral from repo
     // amount - amount of ETH to remove from repo
     function withdrawCollateral(uint256 amount, uint256 series) public {
-        require(
-            amount >= 0,
-            "treasurer-withdrawCollateral-insufficient-balance"
-        );
         repos[series][msg.sender].lockedCollateralAmount = repos[series][msg
             .sender]
             .lockedCollateralAmount
             .sub(amount);
+        require(
+            checkCollateralSufficiency(series, msg.sender),
+            "collateral amount would not be sufficient after withdraw"
+        );
         collateralToken.transfer(msg.sender, amount);
     }
 
@@ -131,13 +132,6 @@ contract Treasurer is Ownable {
         );
 
         Repo memory repo = repos[series][msg.sender];
-        uint256 rate = getSettlmentVSCollateralTokenRate(); // to add rate getter!!!
-        uint256 min = yTokenAmount.wmul(collateralRatio).wmul(rate);
-        require(
-            collateralAmountToLock >= min,
-            "treasurer-issueYToken-insufficient-collateral-for-those-tokens"
-        );
-
         repos[series][msg.sender].lockedCollateralAmount = repo
             .lockedCollateralAmount
             .add(collateralAmountToLock);
@@ -145,6 +139,10 @@ contract Treasurer is Ownable {
             yTokenAmount
         );
 
+        require(
+            checkCollateralSufficiency(series, msg.sender),
+            "more collateral is required to issue yToken"
+        );
         // mint new yTokens
         yTokens[series].mint(msg.sender, yTokenAmount);
     }
@@ -231,12 +229,17 @@ contract Treasurer is Ownable {
         uint256 settlementTokenAmountToBeProvided
     ) public {
         require(series < totalSeries, "treasurer-liquidate-unissued-series");
+
         //check that repo is in danger zone
-        Repo memory repo = repos[series][bum];
-        uint256 rate = getSettlmentVSCollateralTokenRate();
-        uint256 min = repo.debtAmount.wmul(minCollateralRatio).wmul(rate);
-        require(repo.lockedCollateralAmount < min, "treasurer-bite-still-safe");
+        require(
+            !checkCollateralSufficiency(series, bum),
+            "series of bum is sufficiently collateralized"
+        );
+
         // calculate the amount of settlementTokens to be provied
+
+        Repo memory repo = repos[series][bum];
+        uint256 rate = getSettlmentVSCollateralTokenRate(); // to add rate getter!!!
         uint256 amount = Math.min(
             repo.debtAmount,
             settlementTokenAmountToBeProvided
@@ -275,7 +278,7 @@ contract Treasurer is Ownable {
             "treasurer-withdraw-yToken-hasnt-matured"
         );
         if (!settled[series]) {
-            close(series);
+            settleDebtIntoDAIVault(series);
         }
 
         // Following line should always return amount, unless liquidations were not successful
@@ -286,8 +289,11 @@ contract Treasurer is Ownable {
     }
 
     // closes a series and triggers settlement into dai-vault
-    function close(uint256 series) public {
-        require(series < totalSeries, "treasurer-close-unissued-series");
+    function settleDebtIntoDAIVault(uint256 series) public {
+        require(
+            series < totalSeries,
+            "treasurer-settleDebtIntoDAIVault-unissued-series"
+        );
         require(
             now > yTokens[series].maturityTime(),
             "treasurer-withdraw-yToken-hasnt-matured"
@@ -301,5 +307,16 @@ contract Treasurer is Ownable {
         );
 
         settled[series] = true;
+    }
+
+    function checkCollateralSufficiency(uint256 series, address owner)
+        public
+        view
+        returns (bool)
+    {
+        Repo memory repo = repos[series][owner];
+        uint256 rate = getSettlmentVSCollateralTokenRate();
+        uint256 min = repo.debtAmount.wmul(collateralRatio).wmul(rate);
+        return repo.lockedCollateralAmount >= min;
     }
 }

@@ -74,6 +74,10 @@ contract("Treasurer", async accounts => {
     await TreasurerInstance.topUpCollateral(web3.utils.toWei("1"), 0, {
       from: accounts[1]
     });
+    // set up oracle
+    var rate = web3.utils.toWei(".01"); // rate = Dai/ETH
+    await OracleMock.givenAnyReturnUint(rate); // should price ETH at $100 * ONE
+
     await TreasurerInstance.withdrawCollateral(web3.utils.toWei("1"), 0, {
       from: accounts[1]
     });
@@ -322,7 +326,7 @@ contract("Treasurer", async accounts => {
     );
   });
 
-  it("should allow repo holder to close repo and receive remaining collateral", async () => {
+  it("should allow repo holder to settleDebtIntoDAIVault repo and receive remaining collateral", async () => {
     var series = 0;
     var era = (await timestamp("latest", web3)) + SECONDS_IN_DAY;
     await TreasurerInstance.createNewYToken(era);
@@ -344,7 +348,7 @@ contract("Treasurer", async accounts => {
     );
     await helper.advanceTimeAndBlock(SECONDS_IN_DAY * 1.5);
 
-    //run close
-    await TreasurerInstance.close(series, {from: accounts[2]});
+    //run settleDebtIntoDAIVault
+    await TreasurerInstance.settleDebtIntoDAIVault(series, {from: accounts[2]});
   });
 });
