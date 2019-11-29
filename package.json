@@ -9,7 +9,9 @@
   "scripts": {
     "lint": "./node_modules/.bin/eslint .",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "prettier": "./node_modules/.bin/prettier --write 'contracts/**/*.sol'"
+    "prettier:solidity": "prettier --write 'contracts/**/*.sol'",
+    "prettier:js": "prettier --write './**/*.js'",
+    "pretty-check": "prettier --check 'contracts/**/*.sol' && prettier --check './**/*.js'"
   },
   "keywords": [],
   "author": "",

@@ -86,7 +86,7 @@ contract Treasurer is Ownable {
                 address(this),
                 amountCollateral
             ),
-            "treasurer-topUpCollateral-collateralRatio-include-deposit"
+            "Collateral transfer failed"
         );
         repos[series][msg.sender].lockedCollateralAmount = repos[series][msg
             .sender]
@@ -206,7 +206,7 @@ contract Treasurer is Ownable {
 
         //burn tokens
         require(
-            yTokens[series].balanceOf(msg.sender) > credit,
+            yTokens[series].balanceOf(msg.sender) >= credit,
             "treasurer-wipe-insufficient-token-balance"
         );
         yTokens[series].burnFrom(msg.sender, credit);
@@ -301,6 +301,7 @@ contract Treasurer is Ownable {
 
         //Todo: interaction with vault
         uint256 receivedSettlementTokens = 100 ether;
+
         //Todo: adjust settlementTokenFund
         settlementTokenFund[series] = settlementTokenFund[series].add(
             receivedSettlementTokens
