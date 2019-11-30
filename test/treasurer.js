@@ -373,21 +373,7 @@ contract("Treasurer", async accounts => {
       )
     })
   })
-  describe("redeemDebtByProvidingYTokens()", () => {
-    it("should refuse to create an undercollateralized repos", async () => {
-      var series = 0
-
-      // set up oracle
-      const oracle = await Oracle.new()
-      var rate = web3.utils.toWei(".01") // rate = Dai/ETH
-      await OracleMock.givenAnyReturnUint(rate) // should price ETH at $100 * ONE
-
-      await truffleAssert.fails(
-        TreasurerInstance.issueYToken(series, web3.utils.toWei("101"), web3.utils.toWei("1.5"), { from: accounts[2] }),
-        truffleAssert.REVERT
-      )
-    })
-
+  describe("liquidate()", () => {
     it("should accept liquidations undercollateralized repos", async () => {
       var series = 0
       var era = (await timestamp("latest", web3)) + SECONDS_IN_DAY
@@ -429,7 +415,8 @@ contract("Treasurer", async accounts => {
       assert.equal(repo.lockedCollateralAmount.toString(), web3.utils.toWei("0.45"), "Did not unlock collateral")
       assert.equal(repo.debtAmount.toString(), web3.utils.toWei("50"), "Did not redeemDebtByProvidingYTokens debg")
     })
-
+  })
+  describe("claimFaceValue()", () => {
     it("should allow token holder to claimFaceValue face value", async () => {
       var series = 0
       var era = (await timestamp("latest", web3)) + SECONDS_IN_DAY
@@ -449,7 +436,8 @@ contract("Treasurer", async accounts => {
       const transferFunctionality = erc20.contract.methods.transfer(accounts[2], web3.utils.toWei("25")).encodeABI()
       assert.equal(1, await settlementToken.invocationCountForCalldata.call(transferFunctionality))
     })
-
+  })
+  describe("settleDebtIntoDAIVault()", () => {
     it("should allow repo holder to settleDebtIntoDAIVault repo and receive remaining collateral", async () => {
       var series = 0
       var era = (await timestamp("latest", web3)) + SECONDS_IN_DAY
