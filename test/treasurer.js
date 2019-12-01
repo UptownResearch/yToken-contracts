@@ -532,9 +532,67 @@ contract("Treasurer", async accounts => {
       await helper.advanceTimeAndBlock(SECONDS_IN_DAY * 1.5)
 
       const result = await TreasurerInstance.claimFaceValue(series, web3.utils.toWei("25"), accounts[2])
+      yToken = await YToken.at(await TreasurerInstance.yTokens.call(series))
+      assert.equal(await yToken.balanceOf.call(accounts[2]), web3.utils.toWei("75"))
 
       const transferFunctionality = erc20.contract.methods.transfer(accounts[2], web3.utils.toWei("25")).encodeABI()
       assert.equal(1, await settlementToken.invocationCountForCalldata.call(transferFunctionality))
+    })
+    it("can not claim more than yTokens owned", async () => {
+      var series = 0
+      var era = (await timestamp("latest", web3)) + SECONDS_IN_DAY
+      await TreasurerInstance.createNewYToken(era)
+
+      // set up oracle
+      const oracle = await Oracle.new()
+      var rate = web3.utils.toWei(".01") // rate = Dai/ETH
+      await OracleMock.givenAnyReturnUint(rate) // should price ETH at $100 * ONE
+
+      // issueYToken new yTokens with new account
+      await TreasurerInstance.issueYToken(series, web3.utils.toWei("100"), web3.utils.toWei("1.5"), { from: accounts[2] })
+      await helper.advanceTimeAndBlock(SECONDS_IN_DAY * 1.5)
+
+      const result = await TreasurerInstance.claimFaceValue(series, web3.utils.toWei("125"), accounts[2])
+
+      const transferFunctionality = erc20.contract.methods.transfer(accounts[2], web3.utils.toWei("100")).encodeABI()
+      assert.equal(1, await settlementToken.invocationCountForCalldata.call(transferFunctionality))
+    })
+    it("should fail, if series had not been created", async () => {
+      var series = 0
+      var era = (await timestamp("latest", web3)) + SECONDS_IN_DAY
+      await TreasurerInstance.createNewYToken(era)
+
+      // set up oracle
+      const oracle = await Oracle.new()
+      var rate = web3.utils.toWei(".01") // rate = Dai/ETH
+      await OracleMock.givenAnyReturnUint(rate) // should price ETH at $100 * ONE
+
+      // issueYToken new yTokens with new account
+      await TreasurerInstance.issueYToken(series, web3.utils.toWei("100"), web3.utils.toWei("1.5"), { from: accounts[2] })
+      await helper.advanceTimeAndBlock(SECONDS_IN_DAY * 1.5)
+
+      await truffleAssert.reverts(
+        TreasurerInstance.claimFaceValue(series + 2, web3.utils.toWei("25"), accounts[2]),
+        "treasurer-withdraw-unissued-series."
+      )
+    })
+    it("should fail, if maturity time is not yet over", async () => {
+      var series = 0
+      var era = (await timestamp("latest", web3)) + SECONDS_IN_DAY
+      await TreasurerInstance.createNewYToken(era)
+
+      // set up oracle
+      const oracle = await Oracle.new()
+      var rate = web3.utils.toWei(".01") // rate = Dai/ETH
+      await OracleMock.givenAnyReturnUint(rate) // should price ETH at $100 * ONE
+
+      // issueYToken new yTokens with new account
+      await TreasurerInstance.issueYToken(series, web3.utils.toWei("100"), web3.utils.toWei("1.5"), { from: accounts[2] })
+
+      await truffleAssert.reverts(
+        TreasurerInstance.claimFaceValue(series, web3.utils.toWei("25"), accounts[2]),
+        "treasurer-withdraw-yToken-hasnt-matured"
+      )
     })
   })
   describe("settleDebtIntoDAIVault()", () => {
