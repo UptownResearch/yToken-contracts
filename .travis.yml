@@ -1,7 +1,7 @@
 language: node_js
 name: "smart contract tests"
 node_js:
-  - "8"
+  - "10"
 before_install:
   - rm -rf build
   - rm -rf node_modules
