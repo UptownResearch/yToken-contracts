@@ -16,7 +16,7 @@ contract("Treasurer", async accounts => {
   let TreasurerInstance
   let collateralToken
   let erc20
-  beforeEach("deploy OracleMock", async () => {
+  beforeEach("deploy and setup", async () => {
     erc20 = await ERC20.new()
     collateralToken = await MockContract.new()
     await collateralToken.givenAnyReturnBool(true)
@@ -102,6 +102,31 @@ contract("Treasurer", async accounts => {
         }),
         "collateral amount would not be sufficient after withdraw"
       )
+    })
+  })
+  describe("setOracle()", () => {
+    it("should set Oracle address", async () => {
+      const treasurer = await Treasurer.new(
+        collateralToken.address,
+        settlementToken.address,
+        collateralRatio,
+        minCollateralRatio
+      )
+      await treasurer.setOracle(accounts[5])
+      const _address = await treasurer.oracle()
+      assert.equal(_address, accounts[5])
+    })
+    it("should fail, if setOracle is not called by owner", async () => {
+      const treasurer = await Treasurer.new(
+        collateralToken.address,
+        settlementToken.address,
+        collateralRatio,
+        minCollateralRatio
+      )
+      await truffleAssert.reverts(treasurer.setOracle(accounts[5], { from: accounts[3] }), "Ownable: caller is not the owner")
+    })
+    it("should fail, if oracle was already set once", async () => {
+      await truffleAssert.reverts(TreasurerInstance.setOracle(accounts[5]), "oracle was already set")
     })
   })
   describe("oracle()", () => {

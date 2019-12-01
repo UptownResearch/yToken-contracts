@@ -3,12 +3,12 @@ const YToken = artifacts.require("./yToken")
 const truffleAssert = require("truffle-assertions")
 const helper = require("ganache-time-traveler")
 
-contract("Treasurer", async accounts => {
+contract("yToken", async accounts => {
   const [user_1, owner] = accounts
 
   let YTokenInstance
   var maturityTime = 60 * 60 * 24 * 30
-  beforeEach("deploy OracleMock", async () => {
+  beforeEach("deploying", async () => {
     var currentTimeStamp = (await web3.eth.getBlock("latest")).timestamp
     YTokenInstance = await YToken.new(maturityTime + currentTimeStamp, { from: owner })
   })
