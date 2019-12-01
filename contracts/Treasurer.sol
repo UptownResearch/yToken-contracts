@@ -25,6 +25,8 @@ contract Treasurer is Ownable {
     mapping(uint256 => yToken) public yTokens;
     mapping(uint256 => mapping(address => Repo)) public repos; // lockedCollateralAmount ETH and debtAmount
     mapping(uint256 => uint256) public totalCollateralAmountInSeries;
+    mapping(uint256 => uint256) public totalDebtAmountInSeries;
+
     // This fund collects settlementTokens from upfront re-payments or liquidations
     mapping(uint256 => uint256) public settlementTokenFund; // This fund collects settlementTokens from upfront re-payments or liquidations
     mapping(uint256 => bool) public settled; // indicated whether a series was settled into the fault
@@ -85,23 +87,18 @@ contract Treasurer is Ownable {
             ),
             "Collateral transfer failed"
         );
-        repos[series][msg.sender].lockedCollateralAmount = repos[series][msg
-            .sender]
-            .lockedCollateralAmount
-            .add(amountCollateral);
+        addCollateralToRepo(series, msg.sender, amountCollateral);
     }
 
     // remove collateral from repo
     // amount - amount of ETH to remove from repo
     function withdrawCollateral(uint256 amount, uint256 series) public {
-        repos[series][msg.sender].lockedCollateralAmount = repos[series][msg
-            .sender]
-            .lockedCollateralAmount
-            .sub(amount);
+        reduceCollateralOfRepo(series, msg.sender, amount);
         require(
             checkCollateralSufficiency(series, msg.sender),
             "collateral amount would not be sufficient after withdraw"
         );
+
         collateralToken.transfer(msg.sender, amount);
     }
 
@@ -127,14 +124,8 @@ contract Treasurer is Ownable {
             ),
             "transferFrom for collateralToken failed"
         );
-
-        Repo memory repo = repos[series][msg.sender];
-        repos[series][msg.sender].lockedCollateralAmount = repo
-            .lockedCollateralAmount
-            .add(collateralAmountToLock);
-        repos[series][msg.sender].debtAmount = repo.debtAmount.add(
-            yTokenAmount
-        );
+        addCollateralToRepo(series, msg.sender, collateralAmountToLock);
+        addDebtToRepo(series, msg.sender, yTokenAmount);
 
         require(
             checkCollateralSufficiency(series, msg.sender),
@@ -161,9 +152,7 @@ contract Treasurer is Ownable {
             "treasurer-wipe-wipe-more-debtAmount-than-present"
         );
         settlementTokenFund[series] = settlementTokenFund[series].add(credit);
-        repos[series][msg.sender].debtAmount = repos[series][msg.sender]
-            .debtAmount
-            .sub(credit);
+        reduceDebtOfRepo(series, msg.sender, credit);
     }
 
     // redeemDebtByProvidingYTokens repo debtAmount with yToken
@@ -200,9 +189,8 @@ contract Treasurer is Ownable {
         yTokens[series].burnFrom(msg.sender, credit);
 
         // reduce the collateral and the debtAmount
-        repo.lockedCollateralAmount = repo.lockedCollateralAmount.sub(released);
-        repo.debtAmount = repo.debtAmount.sub(credit);
-        repos[series][msg.sender] = repo;
+        reduceCollateralOfRepo(series, msg.sender, released);
+        reduceDebtOfRepo(series, msg.sender, credit);
 
         require(
             checkCollateralSufficiency(series, msg.sender),
@@ -245,10 +233,8 @@ contract Treasurer is Ownable {
         );
 
         //update repo
-        repos[series][bum].lockedCollateralAmount = repo
-            .lockedCollateralAmount
-            .sub(collateralTokensToBeReleased);
-        repos[series][bum].debtAmount = repo.debtAmount.sub(amount);
+        reduceCollateralOfRepo(series, bum, collateralTokensToBeReleased);
+        reduceDebtOfRepo(series, bum, amount);
 
         //Make settlementTokens withdrawable in the future
         settlementTokenFund[series] = settlementTokenFund[series].add(amount);
@@ -277,10 +263,12 @@ contract Treasurer is Ownable {
         }
 
         // Following line should always return amount, unless liquidations were not successful
-        amount = Math.min(settlementTokenFund[series], amount);
-        settlementTokenFund[series] = settlementTokenFund[series].sub(amount);
-        yTokens[series].burnByOwner(owner, amount);
-        settlementToken.transfer(owner, amount);
+        uint256 yTokenAmount = Math.min(settlementTokenFund[series], amount);
+        settlementTokenFund[series] = settlementTokenFund[series].sub(
+            yTokenAmount
+        );
+        yTokens[series].burnByOwner(owner, yTokenAmount);
+        settlementToken.transfer(owner, yTokenAmount);
     }
 
     // closes a series and triggers settlement into dai-vault
@@ -293,9 +281,10 @@ contract Treasurer is Ownable {
             now > yTokens[series].maturityTime(),
             "treasurer-withdraw-yToken-hasnt-matured"
         );
+        require(!settled[series], "series was settled before");
 
         //Todo: interaction with vault
-        uint256 receivedSettlementTokens = 100 ether;
+        uint256 receivedSettlementTokens = totalDebtAmountInSeries[series];
 
         //Todo: adjust settlementTokenFund
         settlementTokenFund[series] = settlementTokenFund[series].add(
@@ -314,5 +303,46 @@ contract Treasurer is Ownable {
         uint256 rate = getSettlmentVSCollateralTokenRate();
         uint256 min = repo.debtAmount.wmul(collateralRatio).wmul(rate);
         return repo.lockedCollateralAmount >= min;
+    }
+
+    function reduceDebtOfRepo(uint256 series, address owner, uint256 amount)
+        internal
+    {
+        repos[series][owner].debtAmount = repos[series][owner].debtAmount.sub(
+            amount
+        );
+        totalDebtAmountInSeries[series] = totalDebtAmountInSeries[series].sub(
+            amount
+        );
+    }
+    function reduceCollateralOfRepo(
+        uint256 series,
+        address owner,
+        uint256 amount
+    ) internal {
+        repos[series][owner].lockedCollateralAmount = repos[series][owner]
+            .lockedCollateralAmount
+            .sub(amount);
+        totalCollateralAmountInSeries[series] = totalCollateralAmountInSeries[series]
+            .sub(amount);
+    }
+    function addDebtToRepo(uint256 series, address owner, uint256 amount)
+        internal
+    {
+        repos[series][owner].debtAmount = repos[series][owner].debtAmount.add(
+            amount
+        );
+        totalDebtAmountInSeries[series] = totalDebtAmountInSeries[series].add(
+            amount
+        );
+    }
+    function addCollateralToRepo(uint256 series, address owner, uint256 amount)
+        internal
+    {
+        repos[series][owner].lockedCollateralAmount = repos[series][owner]
+            .lockedCollateralAmount
+            .add(amount);
+        totalCollateralAmountInSeries[series] = totalCollateralAmountInSeries[series]
+            .add(amount);
     }
 }

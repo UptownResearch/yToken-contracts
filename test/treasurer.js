@@ -613,8 +613,12 @@ contract("Treasurer", async accounts => {
       await TreasurerInstance.issueYToken(series, web3.utils.toWei("100"), web3.utils.toWei("1.5"), { from: accounts[2] })
       await helper.advanceTimeAndBlock(SECONDS_IN_DAY * 1.5)
 
+      assert.equal(await TreasurerInstance.settled(series), false)
+
       //run settleDebtIntoDAIVault
       await TreasurerInstance.settleDebtIntoDAIVault(series, { from: accounts[2] })
+
+      assert.equal(await TreasurerInstance.settled(series), true)
     })
   })
 })
