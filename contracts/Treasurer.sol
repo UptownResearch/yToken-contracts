@@ -66,10 +66,6 @@ contract Treasurer is Ownable {
     {
         require(maturityTime > now, "treasurer-issue-maturity-is-in-past");
         series = totalSeries;
-        require(
-            address(yTokens[series]) == address(0),
-            "treasurer-issue-may-not-reissue-series"
-        );
         yToken _token = new yToken(maturityTime);
         yTokens[series] = _token;
         issuedSeries.push(series);
