@@ -28,7 +28,6 @@ contract Treasurer is Ownable {
     // This fund collects settlementTokens from upfront re-payments or liquidations
     mapping(uint256 => uint256) public settlementTokenFund; // This fund collects settlementTokens from upfront re-payments or liquidations
     mapping(uint256 => bool) public settled; // indicated whether a series was settled into the fault
-    uint256[] public issuedSeries;
     Oracle public oracle;
     uint256 public collateralRatio; // collateralization ratio
     uint256 public minCollateralRatio; // minimum collateralization ratio
@@ -71,7 +70,6 @@ contract Treasurer is Ownable {
         series = totalSeries;
         yToken _token = new yToken(maturityTime);
         yTokens[series] = _token;
-        issuedSeries.push(series);
         totalSeries = totalSeries + 1;
     }
 
