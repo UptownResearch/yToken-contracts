@@ -618,7 +618,56 @@ contract("Treasurer", async accounts => {
       //run settleDebtIntoDAIVault
       await TreasurerInstance.settleDebtIntoDAIVault(series, { from: accounts[2] })
 
+      assert.equal(await TreasurerInstance.settlementTokenFund.call(series), web3.utils.toWei("100"))
       assert.equal(await TreasurerInstance.settled(series), true)
+    })
+    it("should fail, if maturity date has not yet passed", async () => {
+      var series = 0
+      var era = (await timestamp("latest", web3)) + SECONDS_IN_DAY
+      await TreasurerInstance.createNewYToken(era)
+
+      //run settleDebtIntoDAIVault
+      await truffleAssert.reverts(
+        TreasurerInstance.settleDebtIntoDAIVault(series, { from: accounts[2] }),
+        "treasurer-withdraw-yToken-hasnt-matured"
+      )
+    })
+    it("should fail, if series does not exists", async () => {
+      var series = 0
+      var era = (await timestamp("latest", web3)) + SECONDS_IN_DAY
+      await TreasurerInstance.createNewYToken(era)
+
+      //run settleDebtIntoDAIVault
+      await truffleAssert.reverts(
+        TreasurerInstance.settleDebtIntoDAIVault(series + 5, { from: accounts[2] }),
+        "treasurer-settleDebtIntoDAIVault-unissued-series"
+      )
+    })
+    it("should not be allowed to be called twice", async () => {
+      var series = 0
+      var era = (await timestamp("latest", web3)) + SECONDS_IN_DAY
+      await TreasurerInstance.createNewYToken(era)
+
+      // set up oracle
+      var rate = web3.utils.toWei(".01") // rate = Dai/ETH
+      await OracleMock.givenAnyReturnUint(rate) // should price ETH at $100 * ONE
+
+      //fund account
+      await TreasurerInstance.topUpCollateral(web3.utils.toWei("1.5"), series, {
+        from: accounts[2],
+      })
+      // issueYToken new yTokens with new account
+      await TreasurerInstance.issueYToken(series, web3.utils.toWei("100"), web3.utils.toWei("1.5"), { from: accounts[2] })
+      await helper.advanceTimeAndBlock(SECONDS_IN_DAY * 1.5)
+
+      assert.equal(await TreasurerInstance.settled(series), false)
+
+      //run settleDebtIntoDAIVault
+      await TreasurerInstance.settleDebtIntoDAIVault(series, { from: accounts[2] })
+      await truffleAssert.reverts(
+        TreasurerInstance.settleDebtIntoDAIVault(series, { from: accounts[2] }),
+        "series was settled before"
+      )
     })
   })
 })
