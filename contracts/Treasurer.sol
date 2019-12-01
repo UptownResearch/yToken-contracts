@@ -264,7 +264,9 @@ contract Treasurer is Ownable {
     // redeem yTokens for settlementTokens
     // series - matured yToken
     // amount    - amount of yToken to close
-    function claimFaceValue(uint256 series, uint256 amount) public {
+    function claimFaceValue(uint256 series, uint256 amount, address owner)
+        public
+    {
         require(series < totalSeries, "treasurer-withdraw-unissued-series");
         require(
             now > yTokens[series].maturityTime(),
@@ -277,8 +279,8 @@ contract Treasurer is Ownable {
         // Following line should always return amount, unless liquidations were not successful
         amount = Math.min(settlementTokenFund[series], amount);
         settlementTokenFund[series] = settlementTokenFund[series].sub(amount);
-        yTokens[series].burnByOwner(msg.sender, amount);
-        settlementToken.transfer(msg.sender, amount);
+        yTokens[series].burnByOwner(owner, amount);
+        settlementToken.transfer(owner, amount);
     }
 
     // closes a series and triggers settlement into dai-vault
