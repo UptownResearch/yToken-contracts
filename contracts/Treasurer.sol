@@ -190,15 +190,6 @@ contract Treasurer is Ownable {
             repo.debtAmount >= credit,
             "treasurer-wipe-wipe-more-debtAmount-than-present"
         );
-        // if would be undercollateralized after freeing clean, fail
-        uint256 rlocked = repo.lockedCollateralAmount.sub(released);
-        uint256 rdebt = repo.debtAmount.sub(credit);
-        uint256 rate = getSettlmentVSCollateralTokenRate(); // to add rate getter!!!
-        uint256 min = rdebt.wmul(collateralRatio).wmul(rate);
-        require(
-            rlocked >= min,
-            "treasurer-wipe-insufficient-remaining-collateral"
-        );
 
         //burn tokens
         require(
@@ -211,6 +202,11 @@ contract Treasurer is Ownable {
         repo.lockedCollateralAmount = repo.lockedCollateralAmount.sub(released);
         repo.debtAmount = repo.debtAmount.sub(credit);
         repos[series][msg.sender] = repo;
+
+        require(
+            checkCollateralSufficiency(series, msg.sender),
+            "new collateralization ratio is not sufficient"
+        );
 
         collateralToken.transfer(msg.sender, released);
     }

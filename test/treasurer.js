@@ -337,7 +337,7 @@ contract("Treasurer", async accounts => {
         TreasurerInstance.redeemDebtByProvidingYTokens(series, amountToWipe, web3.utils.toWei("0.6"), {
           from: accounts[1],
         }),
-        "treasurer-wipe-insufficient-remaining-collateral"
+        "new collateralization ratio is not sufficient"
       )
     })
     it("should fail, if not sufficient yTokens are owned", async () => {
