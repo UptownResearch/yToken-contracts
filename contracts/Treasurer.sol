@@ -149,7 +149,7 @@ contract Treasurer is Ownable {
         // we assume that the face value == 10**18
         require(
             settlementToken.transferFrom(msg.sender, address(this), credit),
-            "treasurer-wipe-wipe-more-debtAmount-than-present"
+            "SettlementToken transfer failed"
         );
         settlementTokenFund[series] = settlementTokenFund[series].add(credit);
         reduceDebtOfRepo(series, msg.sender, credit);

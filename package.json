@@ -8,6 +8,7 @@
   },
   "scripts": {
     "lint": "./node_modules/.bin/eslint .",
+    "coverage": "./node_modules/.bin/solidity-coverage",
     "test": "echo \"Error: no test specified\" && exit 1",
     "prettier:solidity": "prettier --write 'contracts/**/*.sol'",
     "prettier:js": "prettier --write './**/*.js'",

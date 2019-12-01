@@ -197,6 +197,27 @@ contract("Treasurer", async accounts => {
         "transferFrom for collateralToken failed"
       )
     })
+    it("should fail, if series does not exist", async () => {
+      // create another yToken series with a 24 hour period until maturity
+      await truffleAssert.reverts(
+        TreasurerInstance.issueYToken(0, web3.utils.toWei("1"), web3.utils.toWei("1"), { from: accounts[1] }),
+        "treasurer-make-unissued-series"
+      )
+    })
+    it("should fail to issueYToken new yTokens, if collateral transfer fails", async () => {
+      // create another yToken series with a 24 hour period until maturity
+      var currentTimeStamp = await timestamp("latest", web3)
+      var series = 0
+      var era = currentTimeStamp + SECONDS_IN_DAY
+      await TreasurerInstance.createNewYToken(era)
+      await helper.advanceTimeAndBlock(SECONDS_IN_DAY * 1.5)
+
+      // issueYToken new yTokens
+      await truffleAssert.reverts(
+        TreasurerInstance.issueYToken(series, web3.utils.toWei("1"), web3.utils.toWei("1"), { from: accounts[1] }),
+        "treasurer-issueYToken-invalid-or-matured-ytoken"
+      )
+    })
   })
   describe("redeemDebtByProvidingYTokens()", () => {
     it("should accept tokens to redeemDebtByProvidingYTokens yToken debt", async () => {
@@ -397,6 +418,14 @@ contract("Treasurer", async accounts => {
         "treasurer-wipe-insufficient-token-balance"
       )
     })
+    it("should fail, if series does not exists", async () => {
+      await truffleAssert.reverts(
+        TreasurerInstance.redeemDebtByProvidingYTokens(0, web3.utils.toWei("10"), web3.utils.toWei(".0001"), {
+          from: accounts[1],
+        }),
+        "treasurer-wipe-unissued-series"
+      )
+    })
   })
   describe("liquidate()", () => {
     it("should accept liquidations undercollateralized repos", async () => {
@@ -538,6 +567,29 @@ contract("Treasurer", async accounts => {
       const transferFunctionality = erc20.contract.methods.transfer(accounts[2], web3.utils.toWei("25")).encodeABI()
       assert.equal(1, await settlementToken.invocationCountForCalldata.call(transferFunctionality))
     })
+    it("should allow token holder to claimFaceValue face value, even if series is already settled", async () => {
+      var series = 0
+      var era = (await timestamp("latest", web3)) + SECONDS_IN_DAY
+      await TreasurerInstance.createNewYToken(era)
+
+      // set up oracle
+      const oracle = await Oracle.new()
+      var rate = web3.utils.toWei(".01") // rate = Dai/ETH
+      await OracleMock.givenAnyReturnUint(rate) // should price ETH at $100 * ONE
+
+      // issueYToken new yTokens with new account
+      await TreasurerInstance.issueYToken(series, web3.utils.toWei("100"), web3.utils.toWei("1.5"), { from: accounts[2] })
+      await helper.advanceTimeAndBlock(SECONDS_IN_DAY * 1.5)
+
+      await TreasurerInstance.settleDebtIntoDAIVault(series)
+
+      const result = await TreasurerInstance.claimFaceValue(series, web3.utils.toWei("25"), accounts[2])
+      yToken = await YToken.at(await TreasurerInstance.yTokens.call(series))
+      assert.equal(await yToken.balanceOf.call(accounts[2]), web3.utils.toWei("75"))
+
+      const transferFunctionality = erc20.contract.methods.transfer(accounts[2], web3.utils.toWei("25")).encodeABI()
+      assert.equal(1, await settlementToken.invocationCountForCalldata.call(transferFunctionality))
+    })
     it("can not claim more than yTokens owned", async () => {
       var series = 0
       var era = (await timestamp("latest", web3)) + SECONDS_IN_DAY
@@ -667,6 +719,80 @@ contract("Treasurer", async accounts => {
       await truffleAssert.reverts(
         TreasurerInstance.settleDebtIntoDAIVault(series, { from: accounts[2] }),
         "series was settled before"
+      )
+    })
+  })
+  describe("payoutDebt()", () => {
+    it("should allow debtor to reduce their debt by providing settlementTokens", async () => {
+      var series = 0
+      var era = (await timestamp("latest", web3)) + SECONDS_IN_DAY
+      await TreasurerInstance.createNewYToken(era)
+
+      // set up oracle
+      var rate = web3.utils.toWei(".01") // rate = Dai/ETH
+      await OracleMock.givenAnyReturnUint(rate) // should price ETH at $100 * ONE
+
+      //fund account
+      await TreasurerInstance.topUpCollateral(web3.utils.toWei("1.5"), series, {
+        from: accounts[2],
+      })
+      // issueYToken new yTokens with new account
+      await TreasurerInstance.issueYToken(series, web3.utils.toWei("100"), web3.utils.toWei("1.5"), { from: accounts[2] })
+
+      await TreasurerInstance.payoutDebt(series, web3.utils.toWei("50"), { from: accounts[2] })
+      assert.equal(await TreasurerInstance.settlementTokenFund.call(series), web3.utils.toWei("50"))
+
+      var result = await TreasurerInstance.repos(series, accounts[2])
+      assert.equal(result[1].toString(), web3.utils.toWei("50"))
+    })
+    it("should fail, if payback is bigger than debt", async () => {
+      var series = 0
+      var era = (await timestamp("latest", web3)) + SECONDS_IN_DAY
+      await TreasurerInstance.createNewYToken(era)
+
+      // set up oracle
+      var rate = web3.utils.toWei(".01") // rate = Dai/ETH
+      await OracleMock.givenAnyReturnUint(rate) // should price ETH at $100 * ONE
+
+      //fund account
+      await TreasurerInstance.topUpCollateral(web3.utils.toWei("1.5"), series, {
+        from: accounts[2],
+      })
+      // issueYToken new yTokens with new account
+      await TreasurerInstance.issueYToken(series, web3.utils.toWei("100"), web3.utils.toWei("1.5"), { from: accounts[2] })
+
+      await truffleAssert.reverts(
+        TreasurerInstance.payoutDebt(series, web3.utils.toWei("150"), { from: accounts[2] }),
+        "treasurer-wipe-wipe-more-debtAmount-than-present"
+      )
+    })
+    it("should fail, if series does not exist", async () => {
+      var series = 0
+      await truffleAssert.reverts(
+        TreasurerInstance.payoutDebt(series, web3.utils.toWei("50"), { from: accounts[2] }),
+        "treasurer-payoutDebt-unissued-series"
+      )
+    })
+    it("should fail, if settlementToken transfer fails", async () => {
+      var series = 0
+      var era = (await timestamp("latest", web3)) + SECONDS_IN_DAY
+      await TreasurerInstance.createNewYToken(era)
+
+      // set up oracle
+      var rate = web3.utils.toWei(".01") // rate = Dai/ETH
+      await OracleMock.givenAnyReturnUint(rate) // should price ETH at $100 * ONE
+
+      //fund account
+      await TreasurerInstance.topUpCollateral(web3.utils.toWei("1.5"), series, {
+        from: accounts[2],
+      })
+      // issueYToken new yTokens with new account
+      await TreasurerInstance.issueYToken(series, web3.utils.toWei("100"), web3.utils.toWei("1.5"), { from: accounts[2] })
+
+      await settlementToken.givenAnyReturnBool(false)
+      await truffleAssert.reverts(
+        TreasurerInstance.payoutDebt(series, web3.utils.toWei("50"), { from: accounts[2] }),
+        "SettlementToken transfer failed"
       )
     })
   })

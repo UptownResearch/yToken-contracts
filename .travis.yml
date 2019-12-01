@@ -10,4 +10,4 @@ before_script:
   - ganache-cli -d --gasLimit=100000000 -i 100001  > /dev/null &
   - npm ci
 script:
-  - npx truffle test
+  - npm run coverage && cat ./coverage/lcov.info | coveralls
