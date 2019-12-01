@@ -13,7 +13,10 @@ contract Treasurer is Ownable {
     using SafeMath for uint256;
     using ExponentialOperations for uint256;
 
-    event Log(uint256 amount);
+    uint256 public constant LIQUIDATION_PAYOUT_PERCENTAGE = 5;
+    // 5 percent is the additional reward paid in collateralToken
+    // for liquidation calls
+
     struct Repo {
         uint256 lockedCollateralAmount;
         uint256 debtAmount;
@@ -239,7 +242,7 @@ contract Treasurer is Ownable {
 
         // exchange collateralToken vs settlmentToken
         uint256 collateralTokensToBeReleased = Math.min(
-            (amount.mul(105) / 100).wmul(rate),
+            (amount.mul(100 + LIQUIDATION_PAYOUT_PERCENTAGE) / 100).wmul(rate),
             repo.lockedCollateralAmount
         );
 
