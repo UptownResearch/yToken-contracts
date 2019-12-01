@@ -5,6 +5,7 @@ node_js:
 before_install:
   - rm -rf build
   - rm -rf node_modules
+  - npm install -g npm@6.13
   - npm install -g ganache-cli
 before_script:
   - ganache-cli -d --gasLimit=100000000 -i 100001  > /dev/null &
