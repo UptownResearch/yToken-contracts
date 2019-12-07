@@ -126,7 +126,7 @@ contract("Treasurer", async accounts => {
       await truffleAssert.reverts(treasurer.setOracle(accounts[5], { from: accounts[3] }), "Ownable: caller is not the owner")
     })
     it("should fail, if oracle was already set once", async () => {
-      await truffleAssert.reverts(TreasurerInstance.setOracle(accounts[5]), "oracle was already set")
+      await truffleAssert.reverts(TreasurerInstance.setOracle(accounts[5]), "Oracle was already set")
     })
   })
   describe("oracle()", () => {
@@ -175,7 +175,7 @@ contract("Treasurer", async accounts => {
       // issueYToken new yTokens
       await truffleAssert.reverts(
         TreasurerInstance.issueYToken(series, web3.utils.toWei("10"), web3.utils.toWei("1"), { from: accounts[1] }),
-        "more collateral is required to issue yToken"
+        "More collateral is required to issue yToken"
       )
     })
     it("should fail to issueYToken new yTokens, if collateral transfer fails", async () => {
@@ -194,17 +194,17 @@ contract("Treasurer", async accounts => {
       // issueYToken new yTokens
       await truffleAssert.reverts(
         TreasurerInstance.issueYToken(series, web3.utils.toWei("1"), web3.utils.toWei("1"), { from: accounts[1] }),
-        "transferFrom for collateralToken failed"
+        "transferFrom for collateralToken failed when issuing new YTokens"
       )
     })
     it("should fail, if series does not exist", async () => {
       // create another yToken series with a 24 hour period until maturity
       await truffleAssert.reverts(
         TreasurerInstance.issueYToken(0, web3.utils.toWei("1"), web3.utils.toWei("1"), { from: accounts[1] }),
-        "treasurer-make-unissued-series"
+        "Attempted to issue YTokens of a non-existant series"
       )
     })
-    it("should fail to issueYToken new yTokens, if collateral transfer fails", async () => {
+    it("should fail to issueYToken new yTokens, if series has passed its maturity time", async () => {
       // create another yToken series with a 24 hour period until maturity
       var currentTimeStamp = await timestamp("latest", web3)
       var series = 0
@@ -215,7 +215,7 @@ contract("Treasurer", async accounts => {
       // issueYToken new yTokens
       await truffleAssert.reverts(
         TreasurerInstance.issueYToken(series, web3.utils.toWei("1"), web3.utils.toWei("1"), { from: accounts[1] }),
-        "treasurer-issueYToken-invalid-or-matured-ytoken"
+        "Cannot issue tokens after maturity"
       )
     })
   })
@@ -287,7 +287,7 @@ contract("Treasurer", async accounts => {
         TreasurerInstance.redeemDebtByProvidingYTokens(series, amountToWipe, web3.utils.toWei(".1"), {
           from: accounts[1],
         }),
-        "treasurer-wipe-yToken-has-matured"
+        "Cannot redeem debt after yToken has matured"
       )
     })
     it("should fail, if more bonds are supposed to redeem that owned", async () => {
@@ -320,7 +320,7 @@ contract("Treasurer", async accounts => {
         TreasurerInstance.redeemDebtByProvidingYTokens(series, amountToWipe, web3.utils.toWei(".1"), {
           from: accounts[1],
         }),
-        "treasurer-wipe-wipe-more-debtAmount-than-present"
+        "Cannot redeem more debt than is present"
       )
     })
     it("should fail, if more debt is supposed to be freed that owned", async () => {
@@ -351,7 +351,7 @@ contract("Treasurer", async accounts => {
         TreasurerInstance.redeemDebtByProvidingYTokens(series, amountToWipe, web3.utils.toWei("1.1"), {
           from: accounts[1],
         }),
-        "treasurer-wipe-release-more-than-locked"
+        "Cannot release more collateral than locked"
       )
     })
 
@@ -383,7 +383,7 @@ contract("Treasurer", async accounts => {
         TreasurerInstance.redeemDebtByProvidingYTokens(series, amountToWipe, web3.utils.toWei("0.6"), {
           from: accounts[1],
         }),
-        "new collateralization ratio is not sufficient"
+        "New collateralization ratio is not sufficient"
       )
     })
     it("should fail, if not sufficient yTokens are owned", async () => {
@@ -415,7 +415,7 @@ contract("Treasurer", async accounts => {
         TreasurerInstance.redeemDebtByProvidingYTokens(series, web3.utils.toWei("10"), web3.utils.toWei(".0001"), {
           from: accounts[1],
         }),
-        "treasurer-wipe-insufficient-token-balance"
+        "Insufficient yToken balance for desired redemption"
       )
     })
     it("should fail, if series does not exists", async () => {
@@ -423,7 +423,6 @@ contract("Treasurer", async accounts => {
         TreasurerInstance.redeemDebtByProvidingYTokens(0, web3.utils.toWei("10"), web3.utils.toWei(".0001"), {
           from: accounts[1],
         }),
-        "treasurer-wipe-unissued-series"
       )
     })
   })
@@ -485,7 +484,7 @@ contract("Treasurer", async accounts => {
       // attempt to liquidate
       await truffleAssert.reverts(
         TreasurerInstance.liquidate(series, accounts[2], web3.utils.toWei("50"), { from: accounts[3] }),
-        "series of bum is sufficiently collateralized"
+        "Provided address is sufficiently collateralized for that series"
       )
     })
     it("should fail liquidations if settlementTokens are not provided", async () => {
@@ -516,7 +515,7 @@ contract("Treasurer", async accounts => {
       // attempt to liquidate
       await truffleAssert.reverts(
         TreasurerInstance.liquidate(series, accounts[2], web3.utils.toWei("50"), { from: accounts[3] }),
-        "transfer of settlementToken failed"
+        "Transfer of settlementToken failed"
       )
     })
     it("should fail liquidations non-initialized repos", async () => {
@@ -541,7 +540,7 @@ contract("Treasurer", async accounts => {
       // attempt to liquidate
       await truffleAssert.reverts(
         TreasurerInstance.liquidate(series + 1, accounts[2], web3.utils.toWei("50"), { from: accounts[3] }),
-        "treasurer-liquidate-unissued-series"
+        "Cannot liquidate repo of an unissued series"
       )
     })
   })
@@ -625,7 +624,7 @@ contract("Treasurer", async accounts => {
 
       await truffleAssert.reverts(
         TreasurerInstance.claimFaceValue(series + 2, web3.utils.toWei("25"), accounts[2]),
-        "treasurer-withdraw-unissued-series."
+        "Cannot claim face value of unissued series"
       )
     })
     it("should fail, if maturity time is not yet over", async () => {
@@ -643,7 +642,7 @@ contract("Treasurer", async accounts => {
 
       await truffleAssert.reverts(
         TreasurerInstance.claimFaceValue(series, web3.utils.toWei("25"), accounts[2]),
-        "treasurer-withdraw-yToken-hasnt-matured"
+        "Cannot claim face value of token yet to mature"
       )
     })
   })
@@ -681,7 +680,7 @@ contract("Treasurer", async accounts => {
       //run settleDebtIntoDAIVault
       await truffleAssert.reverts(
         TreasurerInstance.settleDebtIntoDAIVault(series, { from: accounts[2] }),
-        "treasurer-withdraw-yToken-hasnt-matured"
+        "Cannot trigger settlement before maturity"
       )
     })
     it("should fail, if series does not exists", async () => {
@@ -692,7 +691,7 @@ contract("Treasurer", async accounts => {
       //run settleDebtIntoDAIVault
       await truffleAssert.reverts(
         TreasurerInstance.settleDebtIntoDAIVault(series + 5, { from: accounts[2] }),
-        "treasurer-settleDebtIntoDAIVault-unissued-series"
+        "Cannot trigger settlement of an unissued series"
       )
     })
     it("should not be allowed to be called twice", async () => {
@@ -718,11 +717,11 @@ contract("Treasurer", async accounts => {
       await TreasurerInstance.settleDebtIntoDAIVault(series, { from: accounts[2] })
       await truffleAssert.reverts(
         TreasurerInstance.settleDebtIntoDAIVault(series, { from: accounts[2] }),
-        "series was settled before"
+        "Series was previously settled"
       )
     })
   })
-  describe("payoutDebt()", () => {
+  describe("reduceDebt()", () => {
     it("should allow debtor to reduce their debt by providing settlementTokens", async () => {
       var series = 0
       var era = (await timestamp("latest", web3)) + SECONDS_IN_DAY
@@ -739,7 +738,7 @@ contract("Treasurer", async accounts => {
       // issueYToken new yTokens with new account
       await TreasurerInstance.issueYToken(series, web3.utils.toWei("100"), web3.utils.toWei("1.5"), { from: accounts[2] })
 
-      await TreasurerInstance.payoutDebt(series, web3.utils.toWei("50"), { from: accounts[2] })
+      await TreasurerInstance.reduceDebt(series, web3.utils.toWei("50"), { from: accounts[2] })
       assert.equal(await TreasurerInstance.settlementTokenFund.call(series), web3.utils.toWei("50"))
 
       var result = await TreasurerInstance.repos(series, accounts[2])
@@ -762,15 +761,15 @@ contract("Treasurer", async accounts => {
       await TreasurerInstance.issueYToken(series, web3.utils.toWei("100"), web3.utils.toWei("1.5"), { from: accounts[2] })
 
       await truffleAssert.reverts(
-        TreasurerInstance.payoutDebt(series, web3.utils.toWei("150"), { from: accounts[2] }),
-        "treasurer-wipe-wipe-more-debtAmount-than-present"
+        TreasurerInstance.reduceDebt(series, web3.utils.toWei("150"), { from: accounts[2] }),
+        "Cannot reduce debt by amount greater than series debt"
       )
     })
     it("should fail, if series does not exist", async () => {
       var series = 0
       await truffleAssert.reverts(
-        TreasurerInstance.payoutDebt(series, web3.utils.toWei("50"), { from: accounts[2] }),
-        "treasurer-payoutDebt-unissued-series"
+        TreasurerInstance.reduceDebt(series, web3.utils.toWei("50"), { from: accounts[2] }),
+        "Cannot reduce debt of unissued series"
       )
     })
     it("should fail, if settlementToken transfer fails", async () => {
@@ -791,8 +790,8 @@ contract("Treasurer", async accounts => {
 
       await settlementToken.givenAnyReturnBool(false)
       await truffleAssert.reverts(
-        TreasurerInstance.payoutDebt(series, web3.utils.toWei("50"), { from: accounts[2] }),
-        "SettlementToken transfer failed"
+        TreasurerInstance.reduceDebt(series, web3.utils.toWei("50"), { from: accounts[2] }),
+        "SettlementToken transfer failed when reducing debt"
       )
     })
   })

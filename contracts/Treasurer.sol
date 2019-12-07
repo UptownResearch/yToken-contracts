@@ -51,7 +51,7 @@ contract Treasurer is Ownable {
 
     // oracle_ - address of the oracle contract
     function setOracle(Oracle oracle_) public onlyOwner {
-        require(address(oracle) == address(0), "oracle was already set");
+        require(address(oracle) == address(0), "Oracle was already set");
         oracle = oracle_;
     }
 
@@ -68,7 +68,7 @@ contract Treasurer is Ownable {
         public
         returns (uint256 series)
     {
-        require(maturityTime > now, "treasurer-issue-maturity-is-in-past");
+        require(maturityTime > now, "New token maturity is in the past");
         series = totalSeries;
         yToken _token = new yToken(maturityTime);
         yTokens[series] = _token;
@@ -102,19 +102,19 @@ contract Treasurer is Ownable {
         collateralToken.transfer(msg.sender, amount);
     }
 
-    // issueYToken a new yToken
-    // series - yToken to mint
-    // yTokenAmount   - amount of yToken to mint
+    // issueYToken: issue new yTokens
+    // series - yToken to issue
+    // yTokenAmount   - amount of yToken to issue
     // collateralAmountToLock   - amount of collateral to lock up
     function issueYToken(
         uint256 series,
         uint256 yTokenAmount,
         uint256 collateralAmountToLock
     ) public {
-        require(series < totalSeries, "treasurer-make-unissued-series");
+        require(series < totalSeries, "Attempted to issue YTokens of a non-existant series");
         require(
             yTokens[series].maturityTime() > now,
-            "treasurer-issueYToken-invalid-or-matured-ytoken"
+            "Cannot issue tokens after maturity"
         );
         require(
             collateralToken.transferFrom(
@@ -122,14 +122,14 @@ contract Treasurer is Ownable {
                 address(this),
                 collateralAmountToLock
             ),
-            "transferFrom for collateralToken failed"
+            "transferFrom for collateralToken failed when issuing new YTokens"
         );
         addCollateralToRepo(series, msg.sender, collateralAmountToLock);
         addDebtToRepo(series, msg.sender, yTokenAmount);
 
         require(
             checkCollateralSufficiency(series, msg.sender),
-            "more collateral is required to issue yToken"
+            "More collateral is required to issue yToken"
         );
         // mint new yTokens
         yTokens[series].mint(msg.sender, yTokenAmount);
@@ -137,19 +137,19 @@ contract Treasurer is Ownable {
 
     // series - yToken  series
     // credit   - amount of yToken to wipe
-    function payoutDebt(uint256 series, uint256 credit)
+    function reduceDebt(uint256 series, uint256 credit)
         public
         returns (bool, uint256)
     {
-        require(series < totalSeries, "treasurer-payoutDebt-unissued-series");
+        require(series < totalSeries, "Cannot reduce debt of unissued series");
         require(
             repos[series][msg.sender].debtAmount >= credit,
-            "treasurer-wipe-wipe-more-debtAmount-than-present"
+            "Cannot reduce debt by amount greater than series debt"
         );
         // we assume that the face value == 10**18
         require(
             settlementToken.transferFrom(msg.sender, address(this), credit),
-            "SettlementToken transfer failed"
+            "SettlementToken transfer failed when reducing debt"
         );
         settlementTokenFund[series] = settlementTokenFund[series].add(credit);
         reduceDebtOfRepo(series, msg.sender, credit);
@@ -164,27 +164,27 @@ contract Treasurer is Ownable {
         uint256 credit,
         uint256 released
     ) public {
-        require(series < totalSeries, "treasurer-wipe-unissued-series");
+        require(series < totalSeries, "Cannot redeem debt of non-existant series");
         // if yToken has matured, should call resolve
         require(
             now < yTokens[series].maturityTime(),
-            "treasurer-wipe-yToken-has-matured"
+            "Cannot redeem debt after yToken has matured"
         );
 
         Repo memory repo = repos[series][msg.sender];
         require(
             repo.lockedCollateralAmount >= released,
-            "treasurer-wipe-release-more-than-locked"
+            "Cannot release more collateral than locked"
         );
         require(
             repo.debtAmount >= credit,
-            "treasurer-wipe-wipe-more-debtAmount-than-present"
+            "Cannot redeem more debt than is present"
         );
 
         //burn tokens
         require(
             yTokens[series].balanceOf(msg.sender) >= credit,
-            "treasurer-wipe-insufficient-token-balance"
+            "Insufficient yToken balance for desired redemption"
         );
         yTokens[series].burnFrom(msg.sender, credit);
 
@@ -194,7 +194,7 @@ contract Treasurer is Ownable {
 
         require(
             checkCollateralSufficiency(series, msg.sender),
-            "new collateralization ratio is not sufficient"
+            "New collateralization ratio is not sufficient"
         );
 
         collateralToken.transfer(msg.sender, released);
@@ -209,12 +209,12 @@ contract Treasurer is Ownable {
         address bum,
         uint256 settlementTokenAmountToBeProvided
     ) public {
-        require(series < totalSeries, "treasurer-liquidate-unissued-series");
+        require(series < totalSeries, "Cannot liquidate repo of an unissued series");
 
         //check that repo is in danger zone
         require(
             !checkCollateralSufficiency(series, bum),
-            "series of bum is sufficiently collateralized"
+            "Provided address is sufficiently collateralized for that series"
         );
 
         // calculate the amount of settlementTokens to be provied
@@ -242,7 +242,7 @@ contract Treasurer is Ownable {
         // exchange funds for liquidator
         require(
             settlementToken.transferFrom(msg.sender, address(this), amount),
-            "transfer of settlementToken failed"
+            "Transfer of settlementToken failed"
         );
         collateralToken.transfer(msg.sender, collateralTokensToBeReleased);
     }
@@ -253,10 +253,10 @@ contract Treasurer is Ownable {
     function claimFaceValue(uint256 series, uint256 amount, address owner)
         public
     {
-        require(series < totalSeries, "treasurer-withdraw-unissued-series");
+        require(series < totalSeries, "Cannot claim face value of unissued series");
         require(
             now > yTokens[series].maturityTime(),
-            "treasurer-withdraw-yToken-hasnt-matured"
+            "Cannot claim face value of token yet to mature"
         );
         if (!settled[series]) {
             settleDebtIntoDAIVault(series);
@@ -275,13 +275,13 @@ contract Treasurer is Ownable {
     function settleDebtIntoDAIVault(uint256 series) public {
         require(
             series < totalSeries,
-            "treasurer-settleDebtIntoDAIVault-unissued-series"
+            "Cannot trigger settlement of an unissued series"
         );
         require(
             now > yTokens[series].maturityTime(),
-            "treasurer-withdraw-yToken-hasnt-matured"
+            "Cannot trigger settlement before maturity"
         );
-        require(!settled[series], "series was settled before");
+        require(!settled[series], "Series was previously settled");
 
         //Todo: interaction with vault
         uint256 receivedSettlementTokens = totalDebtAmountInSeries[series];
