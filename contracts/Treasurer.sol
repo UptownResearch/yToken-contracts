@@ -22,6 +22,8 @@ contract Treasurer is Ownable {
         uint256 debtAmount;
     }
 
+    event NewSeries(uint256 series, uint256 maturityTime);
+
     mapping(uint256 => yToken) public yTokens;
     mapping(uint256 => mapping(address => Repo)) public repos; // lockedCollateralAmount ETH and debtAmount
     mapping(uint256 => uint256) public totalCollateralAmountInSeries;
@@ -73,6 +75,7 @@ contract Treasurer is Ownable {
         yToken _token = new yToken(maturityTime);
         yTokens[series] = _token;
         totalSeries = totalSeries + 1;
+        emit NewSeries(series, maturityTime);
     }
 
     function topUpCollateral(uint256 amountCollateral, uint256 series)
